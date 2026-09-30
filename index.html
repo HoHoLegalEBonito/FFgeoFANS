@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Final Fantasy GEO FANS - Google Maps Edition</title>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #0c0c0c;
+            --bg-panel: #181818;
+            --bg-card: #222222;
+            --border-color: #444444;
+            --text-color: #f0f0f0;
+            --accent-color: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            background-color: #000;
+            border-bottom: 2px solid var(--border-color);
+            padding: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            color: var(--accent-color);
+        }
+
+        .game-wrapper {
+            width: 100%;
+            max-width: 1100px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .stats-bar {
+            background: var(--bg-panel);
+            border: 2px solid var(--border-color);
+            padding: 12px;
+            border-radius: 4px;
+            display: grid;
+            gap: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #333;
+            padding-bottom: 3px;
+        }
+
+        .stats-item strong {
+            color: #aaa;
+        }
+
+        .main-panel {
+            background: var(--bg-panel);
+            border: 2px solid var(--border-color);
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        button {
+            background: var(--bg-card);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin: 4px 0;
+            width: 100%;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-radius: 3px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        button:active, button:hover {
+            background: #333;
+            border-color: #888;
+        }
+
+        .map-box {
+            background: #000;
+            border: 2px solid var(--border-color);
+            padding: 6px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        #map {
+            width: 100%;
+            height: 320px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background-color: #111;
+        }
+
+        .map-marker-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.8));
+        }
+
+        .player-marker-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid #ff0000;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff0000;
+        }
+
+        .node-card {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin: 8px 0;
+            background: #111;
+            border-radius: 3px;
+        }
+
+        .timer-tag {
+            display: inline-block;
+            background: #441111;
+            color: #ff6666;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 6px;
+            border: 1px solid #662222;
+        }
+
+        /* CONTAINER DE SPRITE COM FALLBACK PARA EMOJI */
+        .sprite-box {
+            width: 64px;
+            height: 64px;
+            margin: 5px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            background-color: #111;
+            border: 2px solid #555;
+            border-radius: 4px;
+            transition: transform 0.1s;
+            overflow: hidden;
+        }
+
+        .sprite-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+
+        /* ANIMAÇÕES DE ATAQUE E IMPACTO */
+        @keyframes animPlayerAttack {
+            0% { transform: translateX(0); }
+            40% { transform: translateX(35px) scale(1.1); }
+            100% { transform: translateX(0); }
+        }
+
+        @keyframes animEnemyAttack {
+            0% { transform: translateX(0); }
+            40% { transform: translateX(-35px) scale(1.1); }
+            100% { transform: translateX(0); }
+        }
+
+        @keyframes animHit {
+            0% { filter: invert(0); }
+            25% { filter: invert(1) drop-shadow(0 0 10px red); transform: scale(0.9); }
+            50% { filter: invert(0); }
+            75% { filter: invert(1) drop-shadow(0 0 10px red); }
+            100% { filter: invert(0); }
+        }
+
+        .attack-player-anim {
+            animation: animPlayerAttack 0.35s ease-in-out;
+        }
+
+        .attack-enemy-anim {
+            animation: animEnemyAttack 0.35s ease-in-out;
+        }
+
+        .hit-anim {
+            animation: animHit 0.35s ease-in-out;
+        }
+
+        .battle-display {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 10px 0;
+            background: #000;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .unit-box {
+            text-align: center;
+            font-size: 0.8rem;
+        }
+
+        .log-box {
+            background: #000;
+            border: 1px solid var(--border-color);
+            height: 100px;
+            overflow-y: auto;
+            padding: 8px;
+            font-size: 0.75rem;
+            margin-bottom: 10px;
+            border-radius: 3px;
+        }
+
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .custom-modal-box {
+            background: var(--bg-panel);
+            border: 2px solid var(--text-color);
+            padding: 20px;
+            width: 85%;
+            max-width: 360px;
+            border-radius: 6px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .custom-modal-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        @media (min-width: 850px) {
+            .game-wrapper {
+                display: grid;
+                grid-template-columns: 320px 1fr;
+                gap: 15px;
+                padding: 20px;
+            }
+
+            .stats-bar {
+                grid-template-columns: 1fr;
+                margin-bottom: 0;
+                height: fit-content;
+            }
+
+            #map {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Final Fantasy GEO FANS</h1>
+    </header>
+
+    <div class="game-wrapper">
+        
+        <div class="stats-bar">
+            <div class="stats-item"><strong>HP:</strong> <span><span id="p-hp">100</span>/<span id="p-maxhp">100</span></span></div>
+            <div class="stats-item"><strong>Slimes:</strong> <span id="p-slimes">0</span></div>
+            <div class="stats-item"><strong>Dino Coins 🦕:</strong> <span id="p-coins">0</span></div>
+            <div class="stats-item"><strong>Corações ❤️ (+30 HP):</strong> <span id="p-hearts">0</span></div>
+            <div class="stats-item" style="border-bottom: none;"><strong>Pet Equipado:</strong> <span id="p-pet">Nenhum</span></div>
+        </div>
+
+        <div class="main-panel">
+
+            <div id="map-screen" class="screen active">
+                <div style="font-size: 0.75rem; text-align: center; margin-bottom: 8px; background: #000; padding: 6px; border: 1px solid #333;">
+                    <span id="gps-status" style="color: #00ff00;">Iniciando Mapa...</span>
+                </div>
+                
+                <div class="map-box">
+                    <div id="map"></div>
+                </div>
+
+                <button onclick="centerMapOnPlayer()" style="background: #1f2d3d;">Centralizar no Jogador</button>
+                
+                <div id="radar-list"></div>
+
+                <button onclick="switchScreen('shop-screen')" style="margin-top: 15px; background: #2a2a2a;">Acessar Loja</button>
+                <button onclick="resetSaveData()" style="margin-top: 5px; background: #3a1c1c; font-size: 0.75rem;">Reiniciar Progresso (Reset Save)</button>
+            </div>
+
+            <div id="battle-screen" class="screen">
+                <div class="battle-display">
+                    <div class="unit-box">
+                        <div id="player-title" style="font-weight: bold; margin-bottom: 4px;">Jogador</div>
+                        <div id="box-player" class="sprite-box">
+                            <img id="img-player" src="" alt="Player" onerror="handleImgError('player')">
+                            <span id="emoji-player" style="display:none;"></span>
+                        </div>
+                        <div>HP: <span id="b-p-hp">100</span></div>
+                    </div>
+                    <div style="font-weight: bold; font-size: 1.1rem; color: #888;">VS</div>
+                    <div class="unit-box">
+                        <div id="enemy-title" style="font-weight: bold; margin-bottom: 4px;">Monstro</div>
+                        <div id="box-enemy" class="sprite-box">
+                            <img id="img-enemy" src="" alt="Enemy" onerror="handleImgError('enemy')">
+                            <span id="emoji-enemy" style="display:none;"></span>
+                        </div>
+                        <div>HP: <span id="b-e-hp">0</span></div>
+                    </div>
+                </div>
+
+                <div class="log-box" id="battle-log"></div>
+
+                <button id="btn-attack" onclick="playerAttack()" style="background: #3a1c1c;">Atacar</button>
+                <button onclick="useHeartInBattle()" style="background: #1c3a1c;">Usar Coração ❤️ (+30 HP)</button>
+                <button onclick="runFromBattle()">Fugir</button>
+            </div>
+
+            <div id="shop-screen" class="screen">
+                <h3 style="text-align: center; margin: 5px 0 10px 0; font-size: 1rem; border-bottom: 1px solid #444; padding-bottom: 5px;">LOJA DE PETS E TROCAS</h3>
+                
+                <div class="node-card">
+                    <strong>Lobo Ninja 🐺🥷</strong> (10 HP | 30 ATK)<br>
+                    <small>Especial: Inimigos iniciantes erram 80% dos ataques (MISS) / avançados erram 20%</small><br>
+                    <strong>Preço: 10 Slimes</strong>
+                    <button onclick="buyPet('loboninja')">Comprar / Equipar</button>
+                </div>
+
+                <div class="node-card">
+                    <strong>Mini Cacto</strong> (50 HP | 10 ATK)<br>
+                    <strong>Preço: 40 Slimes</strong>
+                    <button onclick="buyPet('minicacto')">Comprar / Equipar</button>
+                </div>
+
+                <div class="node-card">
+                    <strong>Fênix</strong> (70 HP | 30 ATK)<br>
+                    <strong>Preço: 100 Slimes</strong>
+                    <button onclick="buyPet('fenix')">Comprar / Equipar</button>
+                </div>
+
+                <div class="node-card">
+                    <strong>Pet T-Rex 🦖</strong> (80 HP | 25 ATK)<br>
+                    <strong>Preço: 80 Dino Coins 🦕</strong>
+                    <button onclick="buyPet('trex')">Comprar / Equipar</button>
+                </div>
+
+                <div class="node-card">
+                    <strong>Trocar 30 Dino Coins 🦕 por 10 Slimes</strong>
+                    <button onclick="exchangeCoinsForSlimes()">Realizar Troca</button>
+                </div>
+
+                <button onclick="switchScreen('map-screen')" style="margin-top: 10px; background: #222;">Voltar ao Mapa</button>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="game-modal" class="custom-modal-overlay">
+        <div class="custom-modal-box">
+            <div id="game-modal-text" class="custom-modal-text"></div>
+            <button onclick="closeGameMessage()" style="background: #333; border: 1px solid #aaa;">[ OK ]</button>
+        </div>
+    </div>
+
+    <script>
+        /* SISTEMA DE SALVAMENTO PERMANENTE VIA LOCALSTORAGE */
+        const SAVE_KEY = "GEO_FANS_GAME_SAVE_DATA";
+
+        let player = {
+            hp: 100,
+            maxHp: 100,
+            baseAtk: 15,
+            slimes: 0,
+            dinoCoins: 0,
+            hearts: 0,
+            equippedPet: null
+        };
+
+        function saveGame() {
+            const dataToSave = {
+                hp: player.hp,
+                maxHp: player.maxHp,
+                slimes: player.slimes,
+                dinoCoins: player.dinoCoins,
+                hearts: player.hearts,
+                equippedPet: player.equippedPet
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));
+        }
+
+        function loadGame() {
+            const rawData = localStorage.getItem(SAVE_KEY);
+            if (rawData) {
+                try {
+                    const parsed = JSON.parse(rawData);
+                    player.hp = parsed.hp ?? 100;
+                    player.maxHp = parsed.maxHp ?? 100;
+                    player.slimes = parsed.slimes ?? 0;
+                    player.dinoCoins = parsed.dinoCoins ?? 0;
+                    player.hearts = parsed.hearts ?? 0;
+                    player.equippedPet = parsed.equippedPet ?? null;
+                } catch(e) {
+                    console.error("Erro ao ler save:", e);
+                }
+            }
+        }
+
+        function resetSaveData() {
+            localStorage.removeItem(SAVE_KEY);
+            player = { hp: 100, maxHp: 100, baseAtk: 15, slimes: 0, dinoCoins: 0, hearts: 0, equippedPet: null };
+            updateUI();
+            showGameMessage("Progresso reiniciado com sucesso.");
+        }
+
+        /* CAIXA DE MENSAGEM */
+        let modalCallback = null;
+
+        function showGameMessage(text, onConfirm = null) {
+            document.getElementById('game-modal-text').innerHTML = text;
+            document.getElementById('game-modal').style.display = 'flex';
+            modalCallback = onConfirm;
+        }
+
+        function closeGameMessage() {
+            document.getElementById('game-modal').style.display = 'none';
+            if (modalCallback) {
+                modalCallback();
+                modalCallback = null;
+            }
+        }
+
+        const MONSTERS = {
+            cacto: { name: 'Cacto', hp: 70, atk: 30, level: 'avancado', sprite: 'cacto', icon: '🌵' },
+            porco: { name: 'Porco', hp: 10, atk: 20, level: 'iniciante', sprite: 'porco', icon: '🐷' },
+            lobo: { name: 'Lobo', hp: 4, atk: 2, level: 'iniciante', sprite: 'lobo', icon: '🐺' },
+            zumbi: { name: 'Zumbi', hp: 60, atk: 23, level: 'avancado', sprite: 'zumbi', icon: '🧟' }
+        };
+
+        const PETS = {
+            fenix: { name: 'Fênix', hp: 70, atk: 30, priceSlime: 100, sprite: 'fenix', icon: '🦅' },
+            minicacto: { name: 'Mini Cacto', hp: 50, atk: 10, priceSlime: 40, sprite: 'minicacto', icon: '🌵' },
+            loboninja: { name: 'Lobo Ninja 🐺🥷', hp: 10, atk: 30, priceSlime: 10, special: true, sprite: 'loboninja', icon: '🐺' },
+            trex: { name: 'Pet T-Rex 🦖', hp: 80, atk: 25, priceCoin: 80, sprite: 'trex', icon: '🦖' }
+        };
+
+        let currentPos = { lat: -23.5505, lng: -46.6333 };
+        let currentBattle = null;
+        let nearbySpawns = [];
+        let leafletMap = null;
+        let playerMapMarker = null;
+        let monsterMapMarkers = [];
+
+        function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return Math.round(R * c);
+        }
+
+        function initMap() {
+            leafletMap = L.map('map').setView([currentPos.lat, currentPos.lng], 18);
+
+            L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: '© Google Maps'
+            }).addTo(leafletMap);
+
+            const playerIcon = L.divIcon({
+                className: 'player-marker-icon',
+                html: '🔴',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+
+            playerMapMarker = L.marker([currentPos.lat, currentPos.lng], { icon: playerIcon }).addTo(leafletMap);
+            playerMapMarker.bindPopup("<b>Você está aqui!</b>").openPopup();
+
+            initGPS();
+
+            setInterval(autoSpawnLoop, 6000);
+            setInterval(gameLoopTick, 1000);
+        }
+
+        function centerMapOnPlayer() {
+            if (leafletMap && currentPos) {
+                leafletMap.setView([currentPos.lat, currentPos.lng], 18);
+            }
+        }
+
+        function initGPS() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.watchPosition(
+                    (pos) => {
+                        currentPos = {
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude
+                        };
+                        
+                        document.getElementById('gps-status').innerHTML = 
+                            `<span style="color:#00ff00;">GPS ATIVO</span> | Lat: ${currentPos.lat.toFixed(4)}, Lng: ${currentPos.lng.toFixed(4)}`;
+
+                        if (playerMapMarker) {
+                            playerMapMarker.setLatLng([currentPos.lat, currentPos.lng]);
+                        }
+
+                        updateSpawnDistances();
+                    },
+                    (err) => {
+                        document.getElementById('gps-status').innerHTML = `<span style="color:#ffaa00;">GPS Indisponível. Usando posição simulada.</span>`;
+                    },
+                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                );
+            } else {
+                document.getElementById('gps-status').innerHTML = `<span style="color:#ffaa00;">GPS Não suportado. Modo Padrão ativo.</span>`;
+            }
+        }
+
+        function autoSpawnLoop() {
+            if (!currentPos) return;
+            if (nearbySpawns.length >= 7) return;
+
+            const types = ['lobo', 'porco', 'cacto', 'zumbi', 'dino_suprimentos'];
+            const randomType = types[Math.floor(Math.random() * types.length)];
+            
+            const latOffset = (Math.random() - 0.5) * 0.0018;
+            const lngOffset = (Math.random() - 0.5) * 0.0018;
+
+            const now = Date.now();
+            const newSpawn = {
+                id: now + Math.random(),
+                type: randomType,
+                lat: currentPos.lat + latOffset,
+                lng: currentPos.lng + lngOffset,
+                distance: 0,
+                createdAt: now,
+                expiresAt: now + 35000
+            };
+
+            nearbySpawns.push(newSpawn);
+            updateSpawnDistances();
+        }
+
+        function gameLoopTick() {
+            const now = Date.now();
+            nearbySpawns = nearbySpawns.filter(spawn => spawn.expiresAt > now);
+            updateSpawnDistances();
+        }
+
+        function updateSpawnDistances() {
+            if (!currentPos) return;
+
+            nearbySpawns.forEach((spawn) => {
+                spawn.distance = calculateDistanceMeters(
+                    currentPos.lat, currentPos.lng,
+                    spawn.lat, spawn.lng
+                );
+            });
+
+            renderGoogleMapMarkers();
+            renderRadarList();
+        }
+
+        function renderGoogleMapMarkers() {
+            if (!leafletMap) return;
+
+            monsterMapMarkers.forEach(m => leafletMap.removeLayer(m));
+            monsterMapMarkers = [];
+
+            const now = Date.now();
+
+            nearbySpawns.forEach((spawn) => {
+                let iconChar = '📦';
+                let name = 'Dino Suprimentos';
+
+                if (spawn.type !== 'dino_suprimentos') {
+                    iconChar = MONSTERS[spawn.type].icon;
+                    name = MONSTERS[spawn.type].name;
+                }
+
+                const secondsLeft = Math.max(0, Math.ceil((spawn.expiresAt - now) / 1000));
+
+                const markerIcon = L.divIcon({
+                    className: 'map-marker-icon',
+                    html: iconChar,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                const marker = L.marker([spawn.lat, spawn.lng], { icon: markerIcon }).addTo(leafletMap);
+                
+                let popupHtml = `<b>${iconChar} ${name}</b><br>Distância: ${spawn.distance}m<br>Sume em: <b>${secondsLeft}s</b><br>`;
+                if (spawn.type === 'dino_suprimentos') {
+                    popupHtml += `<button onclick="collectSupplies(${spawn.id})" style="padding:4px; font-size:11px; margin-top:4px;">Coletar</button>`;
+                } else {
+                    popupHtml += `<button onclick="startBattle('${spawn.type}', ${spawn.id})" style="padding:4px; font-size:11px; margin-top:4px;">Atacar</button>`;
+                }
+
+                marker.bindPopup(popupHtml);
+                monsterMapMarkers.push(marker);
+            });
+        }
+
+        function renderRadarList() {
+            const list = document.getElementById('radar-list');
+            list.innerHTML = '';
+
+            if (nearbySpawns.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:10px; color:#888;">Procurando novos eventos na região...</div>';
+                return;
+            }
+
+            nearbySpawns.sort((a, b) => a.distance - b.distance);
+            const now = Date.now();
+
+            nearbySpawns.forEach((spawn) => {
+                const card = document.createElement('div');
+                card.className = 'node-card';
+                const secondsLeft = Math.max(0, Math.ceil((spawn.expiresAt - now) / 1000));
+
+                if (spawn.type === 'dino_suprimentos') {
+                    card.innerHTML = `
+                        <strong>📦 Dino Suprimentos</strong> - <span>${spawn.distance}m</span>
+                        <span class="timer-tag">⏱️ ${secondsLeft}s</span><br>
+                        <button onclick="collectSupplies(${spawn.id})">Coletar Suprimentos</button>
+                    `;
+                } else {
+                    const m = MONSTERS[spawn.type];
+                    card.innerHTML = `
+                        <strong>${m.icon} ${m.name}</strong> (${m.hp} HP | ${m.atk} ATK) - <span>${spawn.distance}m</span>
+                        <span class="timer-tag">⏱️ ${secondsLeft}s</span><br>
+                        <button onclick="startBattle('${spawn.type}', ${spawn.id})">Iniciar Batalha</button>
+                    `;
+                }
+                list.appendChild(card);
+            });
+        }
+
+        function setupSprite(target, spriteName, fallbackEmoji) {
+            const img = document.getElementById(`img-${target}`);
+            const emojiSpan = document.getElementById(`emoji-${target}`);
+
+            emojiSpan.innerText = fallbackEmoji;
+            img.style.display = 'block';
+            emojiSpan.style.display = 'none';
+
+            img.src = `./${spriteName}.png`;
+        }
+
+        function handleImgError(target) {
+            const img = document.getElementById(`img-${target}`);
+            const emojiSpan = document.getElementById(`emoji-${target}`);
+            img.style.display = 'none';
+            emojiSpan.style.display = 'inline-block';
+        }
+
+        function collectSupplies(spawnId) {
+            const coinsGained = Math.floor(Math.random() * 10) + 5;
+            player.dinoCoins += coinsGained;
+            player.hearts += 1;
+            
+            saveGame();
+            showGameMessage(`Dino Suprimentos Coletados!<br><br><strong>+${coinsGained} Dino Coins 🦕</strong><br><strong>+1 Coração ❤️</strong>`);
+            
+            nearbySpawns = nearbySpawns.filter(s => s.id !== spawnId);
+            updateUI();
+            updateSpawnDistances();
+        }
+
+        function startBattle(monsterKey, spawnId) {
+            const template = MONSTERS[monsterKey];
+            let activeAtk = player.baseAtk;
+            let activeHp = player.hp;
+            let activeMaxHp = player.maxHp;
+            let activeSprite = 'player';
+            let activeIcon = '⚔️';
+            let title = 'Jogador';
+
+            if (player.equippedPet) {
+                const pet = PETS[player.equippedPet];
+                activeAtk = pet.atk;
+                activeHp = pet.hp;
+                activeMaxHp = pet.hp;
+                activeSprite = pet.sprite;
+                activeIcon = pet.icon;
+                title = pet.name;
+            }
+
+            currentBattle = {
+                spawnId: spawnId,
+                enemyKey: monsterKey,
+                enemyName: template.name,
+                enemyHp: template.hp,
+                enemyMaxHp: template.hp,
+                enemyAtk: template.atk,
+                enemyLevel: template.level,
+                enemySprite: template.sprite,
+                enemyIcon: template.icon,
+                playerCurrentHp: activeHp,
+                playerMaxHp: activeMaxHp,
+                playerAtk: activeAtk,
+                playerSprite: activeSprite,
+                playerIcon: activeIcon,
+                playerTitle: title
+            };
+
+            document.getElementById('player-title').innerText = currentBattle.playerTitle;
+            document.getElementById('enemy-title').innerText = currentBattle.enemyName;
+            document.getElementById('battle-log').innerHTML = '';
+
+            logBattle(`Batalha iniciada contra ${currentBattle.enemyName}!`);
+
+            updateBattleDisplay();
+            switchScreen('battle-screen');
+        }
+
+        function updateBattleDisplay() {
+            document.getElementById('b-p-hp').innerText = currentBattle.playerCurrentHp;
+            document.getElementById('b-e-hp').innerText = currentBattle.enemyHp;
+
+            setupSprite('player', currentBattle.playerSprite, currentBattle.playerIcon);
+            setupSprite('enemy', currentBattle.enemySprite, currentBattle.enemyIcon);
+        }
+
+        function logBattle(msg) {
+            const logBox = document.getElementById('battle-log');
+            logBox.innerHTML += `<div>> ${msg}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        /* ATAQUE DO JOGADOR */
+        function playerAttack() {
+            const btn = document.getElementById('btn-attack');
+            btn.disabled = true;
+
+            const playerBox = document.getElementById('box-player');
+            const enemyBox = document.getElementById('box-enemy');
+
+            playerBox.classList.add('attack-player-anim');
+
+            setTimeout(() => {
+                playerBox.classList.remove('attack-player-anim');
+
+                let damage = currentBattle.playerAtk;
+
+                enemyBox.classList.add('hit-anim');
+                setTimeout(() => enemyBox.classList.remove('hit-anim'), 350);
+
+                currentBattle.enemyHp -= damage;
+                if (currentBattle.enemyHp < 0) currentBattle.enemyHp = 0;
+                logBattle(`Ataque bem sucedido! Dano causado: ${damage}`);
+
+                updateBattleDisplay();
+
+                if (currentBattle.enemyHp <= 0) {
+                    winBattle();
+                    btn.disabled = false;
+                    return;
+                }
+
+                setTimeout(enemyAttack, 600);
+            }, 200);
+        }
+
+        /* ATAQUE DO INIMIGO (COM ESQUIVA / MISS DO LOBO NINJA) */
+        function enemyAttack() {
+            const enemyBox = document.getElementById('box-enemy');
+            const playerBox = document.getElementById('box-player');
+
+            enemyBox.classList.add('attack-enemy-anim');
+
+            setTimeout(() => {
+                enemyBox.classList.remove('attack-enemy-anim');
+
+                let enemyMissed = false;
+
+                if (player.equippedPet === 'loboninja') {
+                    const rand = Math.random();
+                    const missChance = currentBattle.enemyLevel === 'iniciante' ? 0.80 : 0.20;
+                    
+                    if (rand < missChance) {
+                        enemyMissed = true;
+                    }
+                }
+
+                if (enemyMissed) {
+                    logBattle(`💨 ${currentBattle.enemyName} atacou, mas ERROU (MISS)!`);
+                } else {
+                    playerBox.classList.add('hit-anim');
+                    setTimeout(() => playerBox.classList.remove('hit-anim'), 350);
+
+                    const dmg = currentBattle.enemyAtk;
+                    currentBattle.playerCurrentHp -= dmg;
+                    if (currentBattle.playerCurrentHp < 0) currentBattle.playerCurrentHp = 0;
+
+                    logBattle(`${currentBattle.enemyName} atacou! Dano sofrido: ${dmg}`);
+                }
+
+                updateBattleDisplay();
+
+                document.getElementById('btn-attack').disabled = false;
+
+                if (currentBattle.playerCurrentHp <= 0) {
+                    logBattle(`Derrota em combate!`);
+                    setTimeout(() => {
+                        showGameMessage('Seu personagem foi derrotado.', () => {
+                            switchScreen('map-screen');
+                        });
+                    }, 600);
+                }
+            }, 200);
+        }
+
+        function useHeartInBattle() {
+            if (player.hearts > 0) {
+                player.hearts--;
+                currentBattle.playerCurrentHp += 30;
+                if (currentBattle.playerCurrentHp > currentBattle.playerMaxHp) {
+                    currentBattle.playerCurrentHp = currentBattle.playerMaxHp;
+                }
+                saveGame();
+                logBattle(`Coração ❤️ utilizado! +30 HP recuperado.`);
+                updateUI();
+                updateBattleDisplay();
+                setTimeout(enemyAttack, 500);
+            } else {
+                logBattle(`Sem Corações no inventário!`);
+            }
+        }
+
+        function winBattle() {
+            player.slimes += 1;
+            saveGame();
+            logBattle(`Vitória! +1 Slime obtido.`);
+            updateUI();
+            
+            nearbySpawns = nearbySpawns.filter(s => s.id !== currentBattle.spawnId);
+
+            setTimeout(() => {
+                showGameMessage('<strong>Vitória!</strong><br>+1 Slime obtido!', () => {
+                    switchScreen('map-screen');
+                    updateSpawnDistances();
+                });
+            }, 600);
+        }
+
+        function runFromBattle() {
+            switchScreen('map-screen');
+        }
+
+        function buyPet(petKey) {
+            const pet = PETS[petKey];
+            if (pet.priceSlime) {
+                if (player.slimes >= pet.priceSlime) {
+                    player.slimes -= pet.priceSlime;
+                    player.equippedPet = petKey;
+                    saveGame();
+                    showGameMessage(`Sucesso!<br>Pet <strong>${pet.name}</strong> comprado e equipado.`);
+                } else {
+                    showGameMessage(`Slimes insuficientes.<br>(Necessários: ${pet.priceSlime})`);
+                }
+            } else if (pet.priceCoin) {
+                if (player.dinoCoins >= pet.priceCoin) {
+                    player.dinoCoins -= pet.priceCoin;
+                    player.equippedPet = petKey;
+                    saveGame();
+                    showGameMessage(`Sucesso!<br>Pet <strong>${pet.name}</strong> comprado e equipado.`);
+                } else {
+                    showGameMessage(`Dino Coins 🦕 insuficientes.<br>(Necessários: ${pet.priceCoin})`);
+                }
+            }
+            updateUI();
+        }
+
+        function exchangeCoinsForSlimes() {
+            if (player.dinoCoins >= 30) {
+                player.dinoCoins -= 30;
+                player.slimes += 10;
+                saveGame();
+                showGameMessage('Troca efetuada:<br>-30 Dino Coins 🦕 por +10 Slimes.');
+            } else {
+                showGameMessage('Dino Coins 🦕 insuficientes.<br>(Necessários: 30)');
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('p-hp').innerText = player.hp;
+            document.getElementById('p-maxhp').innerText = player.maxHp;
+            document.getElementById('p-slimes').innerText = player.slimes;
+            document.getElementById('p-coins').innerText = player.dinoCoins;
+            document.getElementById('p-hearts').innerText = player.hearts;
+            document.getElementById('p-pet').innerText = player.equippedPet ? PETS[player.equippedPet].name : 'Nenhum';
+        }
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            if (screenId === 'map-screen' && leafletMap) {
+                setTimeout(() => leafletMap.invalidateSize(), 200);
+            }
+        }
+
+        window.onload = () => {
+            loadGame();
+            updateUI();
+            initMap();
+        };
+    </script>
+</body>
+</html>
